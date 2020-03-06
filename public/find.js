@@ -1,6 +1,7 @@
 'use strict';
 
 const body = document.body;
+const key = window.location.search.replace(/^\?/,'');
 body.innerHTML = '<div id="map"></div><div id="message"></div>';
 
 let circle;
@@ -29,7 +30,7 @@ function drawLocation(loc){
 }
 
 function updateLocation(){
-  fetch('/location.json', { credentials: 'include' }).then(r=>r.json()).then(drawLocation).finally(()=>{
+  fetch(`/location.json?key=${key}`, { credentials: 'include' }).then(r=>r.json()).then(drawLocation).finally(()=>{
     setTimeout(updateLocation, 30 * 1000);
   });
 }

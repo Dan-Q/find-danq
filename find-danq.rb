@@ -6,6 +6,9 @@ require 'dotenv/load'
 Dotenv.require_keys('FUZZ_FACTOR', 'DRIFT_SEED_SALT', 'DRIFT_FACTOR', 'GOOGLE_MAPS_GEOCODING_API_KEY', 'DB_HOST', 'DB_USERNAME', 'DB_PASSWORD', 'DB_DATABASE')
 require 'json'
 require 'open-uri'
+require 'digest/sha2'
+require 'base64'
+require 'time'
 
 #### Tweak ENV var types ####
 
@@ -16,8 +19,19 @@ DRIFT_FACTOR = ENV['DRIFT_FACTOR'].to_i
 #### Convenience functions ####
 
 TRUSTED_IPS = (ENV['TRUSTED_IPS'] || '').split(',')
-def authenticated?
+def authenticated?(key = '')
   return true if TRUSTED_IPS.include?(request.ip)
+  if key && (key != '')
+    begin
+      from, to, signature = Base64.urlsafe_decode64(key).split('!', 3)
+      return false unless from && to && signature
+      valid_signature = Digest::SHA256.hexdigest([from, to, ENV['KEY_PROTECTOR']].join('/'))
+      return false unless signature == valid_signature
+      from, to, now = Time.parse(from), Time.parse(to), Time.now
+      return true if (from < Time.now) && (Time.now < to)
+    rescue ArgumentError
+    end
+  end
   false
 end
 
@@ -28,9 +42,10 @@ get '/' do
 end
 
 get '/location.json' do
-  authenticated = authenticated?
+  authenticated = authenticated?(params[:key])
   db = Mysql2::Client.new(host: ENV['DB_HOST'], username: ENV['DB_USERNAME'], password: ENV['DB_PASSWORD'], database: ENV['DB_DATABASE'])
   loc = db.query("SELECT DATE_FORMAT(CONVERT_TZ(time, @@SESSION.time_zone, '+00:00'), '%a %e %b %Y, %H:%i UTC') AS time, latitude, longitude, accuracy FROM positions ORDER BY id DESC LIMIT 1").first
+  loc['authenticated'] = authenticated
   begin
     roundedLat, roundedLng = loc['latitude'].round(2), loc['longitude'].round(2)
     geocoding = db.query("SELECT friendly, friendly_limited FROM geocodings WHERE lat=#{roundedLat} AND lng=#{roundedLng}").first
