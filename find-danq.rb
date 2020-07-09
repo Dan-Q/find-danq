@@ -20,7 +20,7 @@ DRIFT_FACTOR = ENV['DRIFT_FACTOR'].to_i
 
 TRUSTED_IPS = (ENV['TRUSTED_IPS'] || '').split(',')
 def authenticated?(key = '')
-  return true if TRUSTED_IPS.include?(request.ip)
+  # If a key is provided, use that FIRST (this makes it easier to see what unauthenticated people would see simply by providing an invalid key)
   if key && (key != '')
     begin
       from, to, signature = Base64.urlsafe_decode64(key).split('!', 3)
@@ -30,9 +30,11 @@ def authenticated?(key = '')
       from, to, now = Time.parse(from), Time.parse(to), Time.now
       return true if (from < Time.now) && (Time.now < to)
     rescue ArgumentError
+      return false
     end
   end
-  false
+  # If no key is provided, check for a trusted IP address
+  TRUSTED_IPS.include?(request.ip)
 end
 
 #### Routes ####
