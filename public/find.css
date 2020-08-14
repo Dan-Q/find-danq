@@ -23,7 +23,7 @@ body {
   background: #ffffffaa;
   color: #333333;
   z-index: 400;
-  font-size: 2vh;
+  font-size: max(2vh, 14px);
   padding: 1.5vh 1vw;
   text-align: center;
   left: 25vw;

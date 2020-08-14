@@ -10,6 +10,10 @@ require 'digest/sha2'
 require 'base64'
 require 'time'
 
+### CORS ###
+set :allow_origin, 'https://danq.me https://bloq.danq.me'
+set :allow_methods, 'GET,HEAD'
+
 #### Tweak ENV var types ####
 
 FUZZ_FACTOR = ENV['FUZZ_FACTOR'].to_i
@@ -37,16 +41,10 @@ def authenticated?(key = '')
   TRUSTED_IPS.include?(request.ip)
 end
 
-#### Routes ####
-
-get '/' do
-  erb :index
-end
-
-get '/location.json' do
+def get_loc
   authenticated = authenticated?(params[:key])
   db = Mysql2::Client.new(host: ENV['DB_HOST'], username: ENV['DB_USERNAME'], password: ENV['DB_PASSWORD'], database: ENV['DB_DATABASE'])
-  loc = db.query("SELECT DATE_FORMAT(CONVERT_TZ(time, @@SESSION.time_zone, '+00:00'), '%a %e %b %Y, %H:%i UTC') AS time, latitude, longitude, accuracy FROM positions ORDER BY id DESC LIMIT 1").first
+  loc = db.query("SELECT UNIX_TIMESTAMP(time) AS unix, DATE_FORMAT(CONVERT_TZ(time, @@SESSION.time_zone, '+00:00'), '%W') AS dow, DATE_FORMAT(CONVERT_TZ(time, @@SESSION.time_zone, '+00:00'), '%a %e %b %Y, %H:%i UTC') AS time, latitude, longitude, accuracy FROM positions ORDER BY id DESC LIMIT 1").first
   loc['authenticated'] = authenticated
   begin
     roundedLat, roundedLng = loc['latitude'].round(2), loc['longitude'].round(2)
@@ -75,6 +73,31 @@ get '/location.json' do
     loc['latitude'] += (rand() - 0.5) / DRIFT_FACTOR
     loc['longitude'] += (rand() - 0.5) / DRIFT_FACTOR
   end
+  loc
+end
+
+#### Routes ####
+
+get '/' do
+  erb :index
+end
+
+get '/location.png' do
+  loc = get_loc
+  lat, lng, zoom, marker = loc['latitude'].round(1), loc['longitude'].round(1), 8, ''
+  if loc['authenticated']
+    zoom = 14
+    lat, lng = loc['latitude'].round(3), loc['longitude'].round(3)
+    marker = "&marker=lonlat:#{lng},#{lat};color:%23155a93;size:medium"
+  end
+  url = "https://maps.geoapify.com/v1/staticmap?style=osm-bright-smooth&width=400&height=400&center=lonlat:#{lng},#{lat}&zoom=#{zoom}&apiKey=#{ENV['GEOAPIFY_API_KEY']}#{marker}"
+  content_type 'text/plain'
+  url
+  #content_type 'image/png'
+  #open url
+end
+
+get '/location.json' do
   content_type 'application/json'
-  loc.to_json
+  get_loc.to_json
 end
