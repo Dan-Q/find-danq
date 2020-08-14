@@ -90,11 +90,13 @@ get '/location.png' do
     lat, lng = loc['latitude'].round(3), loc['longitude'].round(3)
     marker = "&marker=lonlat:#{lng},#{lat};color:%23155a93;size:medium"
   end
-  url = "https://maps.geoapify.com/v1/staticmap?style=osm-bright-smooth&width=400&height=400&center=lonlat:#{lng},#{lat}&zoom=#{zoom}&apiKey=#{ENV['GEOAPIFY_API_KEY']}#{marker}"
-  content_type 'text/plain'
-  url
-  #content_type 'image/png'
-  #open url
+  file = "maps/map-#{lat}-#{lng}-#{zoom}.png"
+  if !File.exists?("public/#{file}")
+    url = "https://maps.geoapify.com/v1/staticmap?style=osm-bright-smooth&width=400&height=400&center=lonlat:#{lng},#{lat}&zoom=#{zoom}&apiKey=#{ENV['GEOAPIFY_API_KEY']}#{marker}"
+    http = Curl.get(url)
+    File.open("public/#{file}", 'wb'){|f| f.print(http.body_str) }
+  end
+  redirect "/#{file}"
 end
 
 get '/location.json' do

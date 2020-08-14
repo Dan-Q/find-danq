@@ -6,7 +6,7 @@ body.innerHTML = '<div id="map"></div><div id="message"></div>';
 
 let circle;
 let message = document.getElementById('message');
-let map = L.map('map').setView([51.5, -1.5], 13);
+let map = L.map('map').setView([51.76, -1.40], 13);
 let loadedTiles = false;
 
 function drawLocation(loc){
@@ -21,12 +21,23 @@ function drawLocation(loc){
     map.panTo( [ loc.latitude, loc.longitude ] );
     setTimeout(function(){
       L.tileLayer(
-      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        { attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>' }
+
+      //'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      //  { attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>' }
+
+      'https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token={accessToken}', {
+        attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+        maxZoom: 18,
+        id: 'mapbox/streets-v11',
+        tileSize: 512,
+        zoomOffset: -1,
+        accessToken: 'pk.eyJ1IjoiaXRzZGFucSIsImEiOiJja2R1NHYzZ3cwMm8wMnZxNHhyNDlmbHc4In0.RxE_PVBmiI1D_4VQ_P32eQ'
+      }
+      
       ).addTo(map);
-    }, 100);
+      map.flyTo( [ loc.latitude, loc.longitude ], zoomLevel );
+    }, 250);
   }
-  map.flyTo( [ loc.latitude, loc.longitude ], zoomLevel );
 }
 
 function updateLocation(){
