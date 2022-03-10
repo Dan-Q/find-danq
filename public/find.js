@@ -41,7 +41,7 @@ function drawLocation(loc){
 }
 
 function updateLocation(){
-  fetch(`location.json?key=${key}`, { credentials: 'include' }).then(r=>r.json()).then(drawLocation).finally(()=>{
+  fetch(`location.json?${key}`, { credentials: 'include' }).then(r=>r.json()).then(drawLocation).finally(()=>{
     setTimeout(updateLocation, 30 * 1000);
   });
 }

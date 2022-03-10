@@ -11,7 +11,7 @@ require 'base64'
 require 'time'
 
 ### CORS ###
-set :allow_origin, 'https://danq.me https://bloq.danq.me'
+set :allow_origin, 'https://danq.me https://bloq.danq.me https://fox.q-t-a.uk'
 set :allow_methods, 'GET,HEAD'
 
 #### Tweak ENV var types ####
@@ -22,17 +22,17 @@ DRIFT_FACTOR = ENV['DRIFT_FACTOR'].to_i
 
 #### Convenience functions ####
 
-TRUSTED_IPS = (ENV['TRUSTED_IPS'] || '').split(',')
+TRUSTED_IPS = (ENV['TRUSTED_IPS'] || '').split(',') + (ENV['TRUSTED_DOMAINS'] || '').split(',').map{|d| `dig +short #{d}`.strip }
 def authenticated?(key = '')
   # If a key is provided, use that FIRST (this makes it easier to see what unauthenticated people would see simply by providing an invalid key)
   if key && (key != '')
     begin
+      now = Time.now.utc.strftime('%Y-%m-%d %H:%M:%S')
       from, to, signature = Base64.urlsafe_decode64(key).split('!', 3)
       return false unless from && to && signature
       valid_signature = Digest::SHA256.hexdigest([from, to, ENV['KEY_PROTECTOR']].join('/'))
       return false unless signature == valid_signature
-      from, to, now = Time.parse(from), Time.parse(to), Time.now
-      return true if (from < Time.now) && (Time.now < to)
+      return (from < now) && (now < to)
     rescue ArgumentError
       return false
     end
@@ -41,10 +41,14 @@ def authenticated?(key = '')
   TRUSTED_IPS.include?(request.ip)
 end
 
-def get_loc
-  authenticated = authenticated?(params[:key])
-  db = Mysql2::Client.new(host: ENV['DB_HOST'], username: ENV['DB_USERNAME'], password: ENV['DB_PASSWORD'], database: ENV['DB_DATABASE'])
-  loc = db.query("SELECT UNIX_TIMESTAMP(time) AS unix, DATE_FORMAT(CONVERT_TZ(time, @@SESSION.time_zone, '+00:00'), '%W') AS dow, DATE_FORMAT(CONVERT_TZ(time, @@SESSION.time_zone, '+00:00'), '%a %e %b %Y, %H:%i UTC') AS time, latitude, longitude, accuracy FROM positions ORDER BY id DESC LIMIT 1").first
+def get_db
+  Mysql2::Client.new(host: ENV['DB_HOST'], username: ENV['DB_USERNAME'], password: ENV['DB_PASSWORD'], database: ENV['DB_DATABASE'])
+end
+
+def get_loc(force_fuzzy: false)
+  authenticated = !force_fuzzy && authenticated?(params['key'])
+  db = get_db
+  loc = db.query("SELECT UNIX_TIMESTAMP(time) AS unix, DATE_FORMAT(CONVERT_TZ(time, @@SESSION.time_zone, '+00:00'), '%W') AS dow, DATE_FORMAT(CONVERT_TZ(time, @@SESSION.time_zone, '+00:00'), '%a %e %b %Y, %H:%i UTC') AS time, latitude, longitude, accuracy FROM positions ORDER BY UNIX_TIMESTAMP(time) DESC LIMIT 1").first
   loc['authenticated'] = authenticated
   begin
     roundedLat, roundedLng = loc['latitude'].round(2), loc['longitude'].round(2)
@@ -63,6 +67,7 @@ def get_loc
   rescue
     loc['friendly'] = ''
   end
+  loc['accuracy'] ||= 0 # GPS unit doesn't record this, it seems; needs re-adding manually
   unless authenticated
     # Fuzz location
     loc['latitude'] = loc['latitude'].round(FUZZ_FACTOR)
@@ -76,14 +81,7 @@ def get_loc
   loc
 end
 
-#### Routes ####
-
-get '/' do
-  erb :index
-end
-
-get '/location.png' do
-  loc = get_loc
+def get_map(loc)
   lat, lng, zoom, marker = loc['latitude'].round(1), loc['longitude'].round(1), 8, ''
   if loc['authenticated']
     zoom = 14
@@ -96,10 +94,57 @@ get '/location.png' do
     http = Curl.get(url)
     File.open("public/#{file}", 'wb'){|f| f.print(http.body_str) }
   end
+  file
+end
+
+#### Routes ####
+
+get '/' do
+  erb :index
+end
+
+get '/fuzzy/location.png' do
+  loc = get_loc(force_fuzzy: true)
+  file = get_map(loc)
+  redirect "/#{file}"
+end
+
+get '/fuzzy/location.json' do
+  content_type 'application/json'
+  get_loc(force_fuzzy: true).to_json
+end
+
+get '/location.png' do
+  loc = get_loc
+  file = get_map(loc)
   redirect "/#{file}"
 end
 
 get '/location.json' do
   content_type 'application/json'
   get_loc.to_json
+end
+
+get '/compass' do
+  erb :compass
+end
+
+get '/heat' do
+  return 'authentication needed' unless authenticated?(params['key'])
+  erb :heat
+end
+
+get '/heat.json' do
+  return 'authentication needed' unless authenticated?(params['key'])
+  content_type 'application/json'
+  db = get_db
+  from = Mysql2::Client.escape(params['from'])
+  to = Mysql2::Client.escape(params['to'])
+  sql = "
+    SELECT ROUND(latitude, 5) lat, ROUND(longitude, 5) lng, POWER(COUNT(*), 3) `count`
+    FROM positions
+    WHERE `time` BETWEEN '#{from}' AND '#{to}'
+    GROUP BY ROUND(latitude, 5), ROUND(longitude, 5)
+  "
+  db.query(sql).to_a.to_json
 end
