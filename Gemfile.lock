@@ -3,15 +3,17 @@ GEM
   specs:
     curb (0.9.10)
     dotenv (2.7.5)
-    mustermann (1.0.3)
+    mustermann (1.1.1)
+      ruby2_keywords (~> 0.0.1)
     mysql2 (0.5.3)
     rack (2.2.3)
-    rack-protection (2.0.7)
+    rack-protection (2.2.0)
       rack
-    sinatra (2.0.7)
+    ruby2_keywords (0.0.5)
+    sinatra (2.2.0)
       mustermann (~> 1.0)
-      rack (~> 2.0)
-      rack-protection (= 2.0.7)
+      rack (~> 2.2)
+      rack-protection (= 2.2.0)
       tilt (~> 2.0)
     sinatra-cors (1.2.0)
     tilt (2.0.10)
@@ -24,7 +26,7 @@ DEPENDENCIES
   dotenv (~> 2.7)
   mysql2 (~> 0.5.3)
   rack (>= 2.0.8)
-  sinatra (~> 2.0)
+  sinatra (~> 2.2)
   sinatra-cors (~> 1.2)
 
 BUNDLED WITH
